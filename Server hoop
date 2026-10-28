@@ -1,0 +1,230 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- SHADOW BOT (RODA NO GITHUB)
+-- ═══════════════════════════════════════════════════════════════════
+
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Http = game:GetService("HttpService")
+
+local lp = Players.LocalPlayer
+local PLACE_ID = 107778070777162
+
+if game.PlaceId ~= PLACE_ID then
+    lp:Kick("Shadow Bot: Wrong Game")
+    return
+end
+
+-- ⭐ SEU WEBHOOK DO DISCORD
+local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1564851666933780480/4cYPwbYbvyQB9oI_UMGhNNYDko12mTga0pYewf8X46P9htiZBL1eftEplcmVOUau8tYt"
+
+-- ═══════════════════════════════════════════════════════════════════
+-- LOG NO DISCORD
+-- ═══════════════════════════════════════════════════════════════════
+local function sendDiscordLog(title, description, color)
+    local httpReq = (syn and syn.request) or (http and http.request) or (http_request) or (fluxus and fluxus.request) or (krnl and krnl.request) or (request)
+    if not httpReq then return end
+    
+    local embed = {
+        title = "🤖 Shadow Bot | " .. title,
+        description = description,
+        color = color or 10181046,
+        footer = { text = "Conta: " .. lp.Name .. " | " .. os.date("%H:%M:%S") }
+    }
+    
+    local body = Http:JSONEncode({ username = "Shadow Bot", embeds = { embed } })
+    pcall(function()
+        httpReq({
+            Url = DISCORD_WEBHOOK,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body,
+        })
+    end)
+end
+
+sendDiscordLog("✅ Bot Iniciado", "Bot ligado na conta **" .. lp.Name .. "**.", 3066993)
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SISTEMA DE SERVER HOP (QUE NÃO DÁ KICK)
+-- ═══════════════════════════════════════════════════════════════════
+local function fazerServerHop()
+    local AllIDs = {}
+    local foundAnything = ""
+    local actualHour = os.date("!*t").hour
+
+    local File = pcall(function()
+        AllIDs = Http:JSONDecode(readfile("NotSameServers.json"))
+    end)
+
+    if not File then
+        table.insert(AllIDs, actualHour)
+        writefile("NotSameServers.json", Http:JSONEncode(AllIDs))
+    end
+
+    local function TPReturner()
+        local Site
+        if foundAnything == "" then
+            Site = Http:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PLACE_ID .. '/servers/Public?sortOrder=Asc&limit=100'))
+        else
+            Site = Http:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PLACE_ID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
+        end
+
+        local ID = ""
+        if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
+            foundAnything = Site.nextPageCursor
+        end
+
+        local num = 0
+        for i, v in pairs(Site.data) do
+            local Possible = true
+            ID = tostring(v.id)
+            if tonumber(v.maxPlayers) > tonumber(v.playing) then
+                for _, Existing in pairs(AllIDs) do
+                    if num ~= 0 then
+                        if ID == tostring(Existing) then
+                            Possible = false
+                        end
+                    else
+                        if tonumber(actualHour) ~= tonumber(Existing) then
+                            pcall(function()
+                                delfile("NotSameServers.json")
+                                AllIDs = {}
+                                table.insert(AllIDs, actualHour)
+                            end)
+                        end
+                    end
+                    num = num + 1
+                end
+                if Possible == true then
+                    table.insert(AllIDs, ID)
+                    wait()
+                    pcall(function()
+                        writefile("NotSameServers.json", Http:JSONEncode(AllIDs))
+                        wait()
+                        game:GetService("TeleportService"):TeleportToPlaceInstance(PLACE_ID, ID, lp)
+                    end)
+                    wait(4)
+                end
+            end
+        end
+    end
+
+    TPReturner()
+    if foundAnything ~= "" then
+        TPReturner()
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SCANNER DE OVOS
+-- ═══════════════════════════════════════════════════════════════════
+local networking = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Networking")
+local AskFieldEggSnapshot = networking:WaitForChild("RF/EggWorld/AskFieldEggSnapshot", 10)
+
+local AssetsDir = nil
+local dataFolder = ReplicatedStorage:FindFirstChild("Data")
+if dataFolder then
+    local assetsMod = dataFolder:FindFirstChild("Assets")
+    if assetsMod then
+        local ok, r = pcall(require, assetsMod)
+        if ok and type(r) == "table" then AssetsDir = r.Directory end
+    end
+end
+
+local Mutations = nil
+local shared = ReplicatedStorage:FindFirstChild("Shared")
+if shared then
+    local mods = shared:FindFirstChild("Modules")
+    if mods then
+        local mutMod = mods:FindFirstChild("Mutations")
+        if mutMod then
+            local ok, r = pcall(require, mutMod)
+            if ok then Mutations = r end
+        end
+    end
+end
+
+local function fmtVal(n)
+    n = tonumber(n) or 0
+    local function f(v,s) local r = string.format("$%.1f%s/s", v, s); return r:gsub("%.0","") end
+    if n >= 1e15 then return f(n/1e15,"Q") end
+    if n >= 1e12 then return f(n/1e12,"T") end
+    if n >= 1e9  then return f(n/1e9,"B") end
+    if n >= 1e6  then return f(n/1e6,"M") end
+    if n >= 1e3  then return f(n/1e3,"K") end
+    return "$" .. tostring(math.floor(n)) .. "/s"
+end
+
+local function scaleMult(scale)
+    local n = tonumber(scale) or 1
+    if n <= 5 then return n ^ 1.85 end
+    return (n / 5) ^ 1.2 * 19.637875755794113
+end
+
+local function getEggData(record)
+    if not AssetsDir then return nil end
+    local asset = AssetsDir[record.AssetCategory]
+    if not asset then return nil end
+    local baseRate = tonumber(asset.EarningRate) or 0
+    local scale = tonumber(record.AssetScale) or 1
+    local mutMult = 1
+    if record.Mutations and #record.Mutations > 0 and Mutations and type(Mutations.EarningsFor) == "function" then
+        local ok, r = pcall(Mutations.EarningsFor, record.Mutations)
+        if ok then mutMult = tonumber(r) or 1 end
+    end
+    local gen = baseRate * scaleMult(scale) * mutMult
+    local rarName = asset.Rarity and (asset.Rarity.DisplayName or asset.Rarity.Name) or ""
+    return {
+        Uid = record.Uid,
+        Nome = asset.DisplayName or record.AssetCategory,
+        Geracao = math.round(gen),
+        RarityName = rarName,
+    }
+end
+
+local publishedKey = nil
+task.spawn(function()
+    while true do
+        -- Tempo aleatório pra não parecer bot
+        task.wait(math.random(8, 15))
+        
+        local ok, snap = pcall(function() return AskFieldEggSnapshot:InvokeServer() end)
+        if ok and snap and snap.Records then
+            local lista = {}
+            for _, r in ipairs(snap.Records) do
+                if r.State == "Slot" or r.State == "Dropped" then
+                    local d = getEggData(r)
+                    if d then table.insert(lista, d) end
+                end
+            end
+            table.sort(lista, function(a,b) return a.Geracao > b.Geracao end)
+            
+            local best = lista[1]
+            if best then
+                local key = tostring(best.Uid) .. "|" .. tostring(best.Geracao)
+                if key ~= publishedKey then
+                    publishedKey = key
+                    
+                    -- 1. Manda pro Discord
+                    sendDiscordLog("🥚 Ovo Encontrado!", table.concat({
+                        "👑 **Egg**: " .. tostring(best.Nome),
+                        "💵 **Money**: ~" .. fmtVal(best.Geracao),
+                        "✨ **Raridade**: " .. tostring(best.RarityName),
+                    }, "\n"), 10181046)
+                    
+                    -- 2. Dá um tempo pro Discord enviar
+                    task.wait(2)
+                    
+                    -- 3. Faz o Server Hop
+                    sendDiscordLog("🔄 Mudando de Servidor", "Pulando para o próximo servidor.", 3447003)
+                    fazerServerHop()
+                    
+                    -- 4. Para o loop
+                    break
+                end
+            end
+        end
+    end
+end)
