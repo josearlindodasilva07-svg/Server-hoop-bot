@@ -5,15 +5,17 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Http = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local LocalPlayer = Players.LocalPlayer
 
 local PLACE_ID = 107778070777162
+-- ⚠️ TROCAR ANTES DE PUBLICAR ⚠️ (webhook de teste)
 local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1564851666933780480/4cYPwbYbvyQB9oI_UMGhNNYDko12mTga0pYewf8X46P9htiZBL1eftEplcmVOUau8tYt"
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/josearlindodasilva07-svg/Server-hoop-bot/refs/heads/main/Server%20hoop"
 
 -- ═══════════════════════════════════════════════════════════════════
--- SISTEMA DE AUTO-RELOAD (Lê a própria URL do GitHub)
+-- AUTO-RELOAD
 -- ═══════════════════════════════════════════════════════════════════
 local function agendarAutoReload()
     local queueFn = (syn and syn.queue_on_teleport) or queue_on_teleport
@@ -23,10 +25,9 @@ local function agendarAutoReload()
         end)
     end
 end
-
 agendarAutoReload()
 
--- ⭐ ESPERA O JOGO CARREGAR 100%
+-- Espera carregar
 repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 repeat task.wait(1) until game:IsLoaded()
 
@@ -36,7 +37,7 @@ if game.PlaceId ~= PLACE_ID then
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- CONSOLE VISUAL NA TELA (Pra ver o que tá rolando)
+-- CONSOLE VISUAL
 -- ═══════════════════════════════════════════════════════════════════
 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild("ShadowBotLog")
@@ -93,85 +94,123 @@ logLabel.TextYAlignment = Enum.TextYAlignment.Top
 logLabel.AutomaticSize = Enum.AutomaticSize.Y
 logLabel.Parent = scroll
 
+local linhas = {}
 local function log(txt, color)
-    local linha = "[" .. os.date("%H:%M:%S") .. "] " .. txt
-    if logLabel.Text == "" then
-        logLabel.Text = linha
-    else
-        logLabel.Text = logLabel.Text .. "\n" .. linha
-    end
+    table.insert(linhas, "[" .. os.date("%H:%M:%S") .. "] " .. txt)
+    if #linhas > 100 then table.remove(linhas, 1) end
+    logLabel.Text = table.concat(linhas, "\n")
     logLabel.TextColor3 = color or Color3.fromRGB(200, 200, 220)
     task.defer(function()
         scroll.CanvasPosition = Vector2.new(0, scroll.AbsoluteCanvasSize.Y)
     end)
 end
 
-log("✅ Bot carregou no servidor " .. game.JobId:sub(1, 8), Color3.fromRGB(100, 220, 160))
+log("✅ Bot carregou: " .. game.JobId:sub(1, 8), Color3.fromRGB(100, 220, 160))
 
 -- ═══════════════════════════════════════════════════════════════════
--- LOG NO DISCORD
+-- LOG NO DISCORD — SÓ O OVO
 -- ═══════════════════════════════════════════════════════════════════
-local function sendDiscordLog(titleTxt, description, color)
+local function sendEggToDiscord(best)
     local httpReq = (syn and syn.request) or (http and http.request) or (http_request) or (fluxus and fluxus.request) or (krnl and krnl.request) or (request)
     if not httpReq then return end
     local embed = {
-        title = "🤖 Shadow Bot | " .. titleTxt,
-        description = description,
-        color = color or 10181046,
+        title = "🤖 Shadow Bot | 🥚 Ovo Encontrado!",
+        description = table.concat({
+            "👑 **Egg**: " .. tostring(best.Nome),
+            "💵 **Money**: ~" .. fmtVal(best.Geracao),
+            "✨ **Raridade**: " .. tostring(best.RarityName),
+        }, "\n"),
+        color = 10181046,
         footer = { text = "Conta: " .. LocalPlayer.Name .. " | " .. os.date("%H:%M:%S") }
     }
     local body = Http:JSONEncode({ username = "Shadow Bot", embeds = { embed } })
-    pcall(function()
-        httpReq({ Url = DISCORD_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body })
+    -- dispara SEM await, pra não atrasar o hop
+    task.spawn(function()
+        pcall(function()
+            httpReq({ Url = DISCORD_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = body })
+        end)
     end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- SERVER HOP BLINDADO
+-- SERVER HOP RESILIENTE (tenta vários, embaralha)
 -- ═══════════════════════════════════════════════════════════════════
-local function fazerServerHop()
-    log("🔄 Iniciando Server Hop...", Color3.fromRGB(255, 190, 100))
-    sendDiscordLog("🔄 Server Hop", "Procurando novo servidor...", 3447003)
-    
-    local sucesso = false
-    
-    pcall(function()
-        log("→ Buscando servidores públicos...", Color3.fromRGB(170, 110, 255))
-        
-        local resp = game:HttpGet("https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100")
-        local data = Http:JSONDecode(resp)
-        
-        if data and data.data and #data.data > 0 then
-            log("→ " .. #data.data .. " servidores encontrados.", Color3.fromRGB(170, 110, 255))
-            
-            for _, srv in ipairs(data.data) do
-                if tonumber(srv.playing) < tonumber(srv.maxPlayers) and tostring(srv.id) ~= game.JobId then
-                    log("🚀 Teleportando para " .. tostring(srv.id):sub(1, 8) .. "...", Color3.fromRGB(100, 220, 160))
-                    
-                    local okTp = pcall(function()
-                        game:GetService("TeleportService"):TeleportToPlaceInstance(PLACE_ID, tostring(srv.id), LocalPlayer)
-                    end)
-                    
-                    if okTp then
-                        log("✅ Teleporte enviado!", Color3.fromRGB(100, 220, 160))
-                        sucesso = true
-                        task.wait(5)
-                        break
+local function buscarServidores()
+    local lista = {}
+    local cursor = nil
+    for page = 1, 3 do
+        local ok = pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. PLACE_ID ..
+                "/servers/Public?sortOrder=Asc&limit=100" ..
+                (cursor and ("&cursor=" .. cursor) or "")
+            local resp = game:HttpGet(url, true, {
+                ["User-Agent"] = "Roblox/WinInet",
+                ["Accept"] = "application/json",
+            })
+            local data = Http:JSONDecode(resp)
+            if data and data.data then
+                for _, srv in ipairs(data.data) do
+                    if tonumber(srv.playing) and tonumber(srv.maxPlayers)
+                        and tonumber(srv.playing) < tonumber(srv.maxPlayers)
+                        and tostring(srv.id) ~= game.JobId then
+                        table.insert(lista, srv)
                     end
                 end
+                cursor = data.nextPageCursor
             end
-        else
-            log("❌ API não retornou servidores.", Color3.fromRGB(255, 90, 130))
-        end
-    end)
-    
-    if not sucesso then
-        log("❌ Hop falhou. Usando Rejoin...", Color3.fromRGB(255, 90, 130))
-        sendDiscordLog("❌ Hop Falhou", "Usando rejoin padrão.", 15105570)
-        pcall(function()
-            game:GetService("TeleportService"):Teleport(PLACE_ID, LocalPlayer)
         end)
+        if not ok or not cursor then break end
+        task.wait(0.3)
     end
+    return lista
+end
+
+local function tentarTeleportar(jobId)
+    local falhou = false
+    local conn = TeleportService.TeleportInitFailed:Connect(function()
+        falhou = true
+    end)
+    local okTp = pcall(function()
+        TeleportService:TeleportToPlaceInstance(PLACE_ID, tostring(jobId), LocalPlayer)
+    end)
+    local t0 = os.clock()
+    while not falhou and os.clock() - t0 < 5 do task.wait(0.2) end
+    conn:Disconnect()
+    return okTp and not falhou
+end
+
+local function fazerServerHop()
+    log("🔄 Server Hop...", Color3.fromRGB(255, 190, 100))
+
+    local servidores = buscarServidores()
+    if #servidores == 0 then
+        log("❌ Sem servidores. Rejoin...", Color3.fromRGB(255, 90, 130))
+        pcall(function() TeleportService:Teleport(PLACE_ID, LocalPlayer) end)
+        return
+    end
+
+    log("→ " .. #servidores .. " servidores válidos.", Color3.fromRGB(170, 110, 255))
+
+    for i = #servidores, 2, -1 do
+        local j = math.random(i)
+        servidores[i], servidores[j] = servidores[j], servidores[i]
+    end
+
+    for i, srv in ipairs(servidores) do
+        local jobId = tostring(srv.id)
+        log("🚀 " .. i .. "/" .. #servidores .. " → " .. jobId:sub(1, 8), Color3.fromRGB(170, 110, 255))
+        local ok = tentarTeleportar(jobId)
+        if ok then
+            log("✅ Enviado!", Color3.fromRGB(100, 220, 160))
+            task.wait(10) -- se ainda vivo, falhou silencioso
+        else
+            log("⚠️ Falhou. Próximo...", Color3.fromRGB(255, 190, 100))
+            task.wait(0.5)
+        end
+    end
+
+    log("❌ Todos falharam. Rejoin.", Color3.fromRGB(255, 90, 130))
+    pcall(function() TeleportService:Teleport(PLACE_ID, LocalPlayer) end)
 end
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -253,24 +292,23 @@ local function getEggData(record)
     return {
         Uid = record.Uid,
         Nome = asset.DisplayName or record.AssetCategory,
-        Geracao = math.round(gen),
+        Geracao = math.floor(gen + 0.5),
         RarityName = rarName,
     }
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- SCANNER COM TIMEOUT
+-- SCANNER RÁPIDO
 -- ═══════════════════════════════════════════════════════════════════
 local function lerOvosComTimeout()
-    local resultado = nil
-    local finalizado = false
+    local resultado, finalizado = nil, false
     task.spawn(function()
         local ok, snap = pcall(function() return AskFieldEggSnapshot:InvokeServer() end)
         if ok and snap and snap.Records then resultado = snap end
         finalizado = true
     end)
-    local t0 = os.clock()
-    while not finalizado and os.clock() - t0 < 5 do task.wait(0.1) end
+    task.delay(4, function() finalizado = true end)
+    while not finalizado do task.wait(0.05) end
     return resultado
 end
 
@@ -280,28 +318,26 @@ local tentativasErro = 0
 log("🔍 Scanner iniciado!", Color3.fromRGB(100, 220, 160))
 
 task.spawn(function()
-    task.wait(3)
-    
+    task.wait(2) -- espera mínima pro servidor aceitar o InvokeServer
+
     while true do
-        task.wait(math.random(8, 15))
-        
         log("→ Lendo ovos...", Color3.fromRGB(170, 110, 255))
         local snap = lerOvosComTimeout()
-        
+
         if not snap then
             tentativasErro = tentativasErro + 1
             log("⚠️ Timeout (" .. tentativasErro .. "/3)", Color3.fromRGB(255, 190, 100))
             if tentativasErro >= 3 then
-                log("❌ 3 falhas seguidas. Server Hop.", Color3.fromRGB(255, 90, 130))
-                sendDiscordLog("⚠️ Scanner Bugado", "Falhou 3x. Server Hop forçado.", 15105570)
+                log("❌ 3 falhas. Hop forçado.", Color3.fromRGB(255, 90, 130))
                 fazerServerHop()
                 return
             end
+            task.wait(1)
             continue
         end
-        
+
         tentativasErro = 0
-        
+
         local lista = {}
         for _, r in ipairs(snap.Records) do
             if r and r.Uid and (r.State == "Slot" or r.State == "Dropped") then
@@ -309,29 +345,25 @@ task.spawn(function()
                 if d then table.insert(lista, d) end
             end
         end
-        
+
         table.sort(lista, function(a,b) return a.Geracao > b.Geracao end)
-        
+
         local best = lista[1]
         if best then
-            log("🥚 Melhor ovo: " .. best.Nome .. " (" .. fmtVal(best.Geracao) .. ")", Color3.fromRGB(100, 220, 160))
+            log("🥚 Melhor: " .. best.Nome .. " (" .. fmtVal(best.Geracao) .. ")", Color3.fromRGB(100, 220, 160))
             local key = tostring(best.Uid) .. "|" .. tostring(best.Geracao)
             if key ~= publishedKey then
                 publishedKey = key
-                log("📤 Enviando pro Discord...", Color3.fromRGB(100, 220, 160))
-                
-                sendDiscordLog("🥚 Ovo Encontrado!", table.concat({
-                    "👑 **Egg**: " .. tostring(best.Nome),
-                    "💵 **Money**: ~" .. fmtVal(best.Geracao),
-                    "✨ **Raridade**: " .. tostring(best.RarityName),
-                }, "\n"), 10181046)
-                
-                task.wait(2)
-                fazerServerHop()
+                log("📤 Enviando e hopando...", Color3.fromRGB(100, 220, 160))
+                sendEggToDiscord(best)     -- dispara em background, não trava
+                fazerServerHop()           -- hopa IMEDIATAMENTE, sem task.wait
                 return
             end
         else
             log("→ Nenhum ovo válido.", Color3.fromRGB(150, 130, 180))
         end
+
+        -- SEM espera longa: novo scan imediato
+        task.wait(0.5)
     end
 end)
