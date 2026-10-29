@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════
--- SHADOW BOT (COM CONSOLE + ANTI-BUG)
+-- SHADOW BOT DEFINITIVO (AUTO-HOP + AUTO-RELOAD)
 -- ═══════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -7,15 +7,28 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Http = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
+local PLACE_ID = 107778070777162
+local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1564851666933780480/4cYPwbYbvyQB9oI_UMGhNNYDko12mTga0pYewf8X46P9htiZBL1eftEplcmVOUau8tYt"
+
+local SCRIPT_URL = "https://raw.githubusercontent.com/josearlindodasilva07-svg/Server-hoop-bot/refs/heads/main/Server%20hoop"
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SISTEMA DE AUTO-RELOAD (Lê a própria URL do GitHub)
+-- ═══════════════════════════════════════════════════════════════════
+local function agendarAutoReload()
+    local queueFn = (syn and syn.queue_on_teleport) or queue_on_teleport
+    if type(queueFn) == "function" then
+        pcall(function()
+            queueFn('game:HttpGet("' .. SCRIPT_URL .. '")')
+        end)
+    end
+end
+
+agendarAutoReload()
+
 -- ⭐ ESPERA O JOGO CARREGAR 100%
 repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 repeat task.wait(1) until game:IsLoaded()
-
--- ⭐ AVISA O AUTO LOAD QUE O BOT TÁ VIVO
-getgenv()["__BotRodandoAgora"] = true
-
-local PLACE_ID = 107778070777162
-local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1564851666933780480/4cYPwbYbvyQB9oI_UMGhNNYDko12mTga0pYewf8X46P9htiZBL1eftEplcmVOUau8tYt"
 
 if game.PlaceId ~= PLACE_ID then
     LocalPlayer:Kick("Shadow Bot: Wrong Game")
@@ -23,7 +36,7 @@ if game.PlaceId ~= PLACE_ID then
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- CONSOLE VISUAL NA TELA
+-- CONSOLE VISUAL NA TELA (Pra ver o que tá rolando)
 -- ═══════════════════════════════════════════════════════════════════
 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild("ShadowBotLog")
@@ -36,7 +49,7 @@ gui.DisplayOrder = 999999
 gui.Parent = playerGui
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 350, 0, 220)
+main.Size = UDim2.new(0, 300, 0, 180)
 main.Position = UDim2.new(0, 10, 0, 80)
 main.BackgroundColor3 = Color3.fromRGB(10, 8, 15)
 main.BorderSizePixel = 0
@@ -114,15 +127,11 @@ local function sendDiscordLog(titleTxt, description, color)
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- SERVER HOP (BLINDADO)
+-- SERVER HOP BLINDADO
 -- ═══════════════════════════════════════════════════════════════════
 local function fazerServerHop()
     log("🔄 Iniciando Server Hop...", Color3.fromRGB(255, 190, 100))
     sendDiscordLog("🔄 Server Hop", "Procurando novo servidor...", 3447003)
-    
-    -- ⭐ AVISA O AUTO LOAD QUE VAI TELEPORTAR
-    getgenv()["__BotRodandoAgora"] = false
-    task.wait(1)
     
     local sucesso = false
     
@@ -135,7 +144,6 @@ local function fazerServerHop()
         if data and data.data and #data.data > 0 then
             log("→ " .. #data.data .. " servidores encontrados.", Color3.fromRGB(170, 110, 255))
             
-            -- Tenta achar um diferente do atual e com espaço
             for _, srv in ipairs(data.data) do
                 if tonumber(srv.playing) < tonumber(srv.maxPlayers) and tostring(srv.id) ~= game.JobId then
                     log("🚀 Teleportando para " .. tostring(srv.id):sub(1, 8) .. "...", Color3.fromRGB(100, 220, 160))
@@ -158,7 +166,7 @@ local function fazerServerHop()
     end)
     
     if not sucesso then
-        log("❌ Hop falhou. Usando Rejoin padrão...", Color3.fromRGB(255, 90, 130))
+        log("❌ Hop falhou. Usando Rejoin...", Color3.fromRGB(255, 90, 130))
         sendDiscordLog("❌ Hop Falhou", "Usando rejoin padrão.", 15105570)
         pcall(function()
             game:GetService("TeleportService"):Teleport(PLACE_ID, LocalPlayer)
@@ -251,7 +259,7 @@ local function getEggData(record)
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- SCANNER (COM TIMEOUT)
+-- SCANNER COM TIMEOUT
 -- ═══════════════════════════════════════════════════════════════════
 local function lerOvosComTimeout()
     local resultado = nil
@@ -293,7 +301,6 @@ task.spawn(function()
         end
         
         tentativasErro = 0
-        log("→ " .. #snap.Records .. " registros recebidos.", Color3.fromRGB(170, 110, 255))
         
         local lista = {}
         for _, r in ipairs(snap.Records) do
