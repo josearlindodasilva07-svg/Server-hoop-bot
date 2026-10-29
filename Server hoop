@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════
--- SHADOW BOT DEFINITIVO (AUTO-HOP + AUTO-RELOAD)
+-- SHADOW BOT DEFINITIVO (AUTO-HOP + REINJEÇÃO VIA queue_on_teleport)
 -- ═══════════════════════════════════════════════════════════════════
 
 local Players = game:GetService("Players")
@@ -17,18 +17,22 @@ repeat task.wait(1) until LocalPlayer.Character and LocalPlayer.Character:FindFi
 repeat task.wait(1) until game:IsLoaded()
 
 -- ═══════════════════════════════════════════════════════════════════
--- SISTEMA DE AUTO-RELOAD (agendado DEPOIS do load, senão o executor ignora)
+-- REINJEÇÃO VIA queue_on_teleport (NÃO é o auto execute do executor)
+-- Chama a função do próprio executor dizendo:
+-- "quando EU teleportar, roda este código no próximo servidor"
 -- ═══════════════════════════════════════════════════════════════════
-local function agendarAutoReload()
-    local queueFn = (syn and syn.queue_on_teleport) or queue_on_teleport
+local function agendarReinjeccao()
+    local queueFn = (syn and syn.queue_on_teleport) or queue_on_teleport or queueonteleport
     if type(queueFn) == "function" then
         pcall(function()
             queueFn('game:HttpGet("' .. SCRIPT_URL .. '")')
         end)
+        return true
     end
+    return false
 end
 
-agendarAutoReload()
+local reinjecaoOK = agendarReinjeccao()
 
 if game.PlaceId ~= PLACE_ID then
     LocalPlayer:Kick("Shadow Bot: Wrong Game")
@@ -36,7 +40,7 @@ if game.PlaceId ~= PLACE_ID then
 end
 
 -- ═══════════════════════════════════════════════════════════════════
--- CONSOLE VISUAL NA TELA (Pra ver o que tá rolando)
+-- CONSOLE VISUAL NA TELA
 -- ═══════════════════════════════════════════════════════════════════
 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild("ShadowBotLog")
@@ -105,6 +109,11 @@ local function log(txt, color)
 end
 
 log("✅ Bot carregou no servidor " .. game.JobId:sub(1, 8), Color3.fromRGB(100, 220, 160))
+if reinjecaoOK then
+    log("♻️ Reinjeção agendada (queue_on_teleport OK)", Color3.fromRGB(100, 220, 160))
+else
+    log("⚠️ Executor não suporta queue_on_teleport — não reinjeta.", Color3.fromRGB(255, 190, 100))
+end
 
 -- ═══════════════════════════════════════════════════════════════════
 -- LOG NO DISCORD (só o ovo)
@@ -129,6 +138,9 @@ end
 -- ═══════════════════════════════════════════════════════════════════
 local function fazerServerHop()
     log("🔄 Iniciando Server Hop...", Color3.fromRGB(255, 190, 100))
+
+    -- re-agenda a reinjeção antes de hopar (garantia)
+    agendarReinjeccao()
 
     local TeleportService = game:GetService("TeleportService")
     local servidores = {}
@@ -347,7 +359,6 @@ task.spawn(function()
                 publishedKey = key
                 log("📤 Enviando pro Discord...", Color3.fromRGB(100, 220, 160))
                 
-                -- dispara o envio em background (não bloqueia o hop)
                 task.spawn(function()
                     sendDiscordLog("🥚 Ovo Encontrado!", table.concat({
                         "👑 **Egg**: " .. tostring(best.Nome),
@@ -356,7 +367,6 @@ task.spawn(function()
                     }, "\n"), 10181046)
                 end)
                 
-                -- 0.3s só pra garantir que o request já está em voo antes do teleporte
                 task.wait(0.3)
                 fazerServerHop()
                 return
